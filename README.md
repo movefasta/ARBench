@@ -13,45 +13,16 @@ This project is in its early stage therefore specific design rules must be follo
 
 ## Requirements
 * [Freecad][freecad] with [A2Plus][a2plus] workspace installed
-* [ROS][ros] *Optional*, If you wish to install it as a package
 
 ## Usage
 
-#### Clone the repository to catkin workspace
-```console
-$ git clone https://github.com/Dave-Elec/freecad_to_gazebo.git ~/catkin_ws/src
+#### To generate SDF and URDF model from freecad assembly use python call:
+```python
+freecad_exporter.export_gazebo_model(freecad_assembly_file, model_destination_folder, config)
 ```
+Note: Only links and joints are generated in the SDF model. To use the model with ros, use the URDF model.
 
-#### Re-build catkin workspace
-```console
-$ catkin_make
-$ source devel/setup.bash
-```
-
-#### To generate only SDF model from freecad assembly:
-```console
-# freecad2gazebo <assembly_file> <path/to/model_dir> --sdf-only
-```
-
-#### To generate SDF and URDF model from freecad assembly:
-```console
-$ freecad2gazebo <assembly_file> <path/to/model_dir>
-```
-Note: Only links and joints are generated in the SDF model. to use the model with ros, use the URDF model.
-
-## Options
-```console
-$ freecad2gazebo <assembly_file> <path/to/model> [--sdf-only] [--noexport] [--config <path/to/config>]
-```
-
-**--sdf**: Export only SDF.
-
-**--noexport**: Don't export mesh files.
-
-**--config**: Use other configuration file. (default is `robot_config.json` inside a directory the same as the assembly file).
-
-
-## Example config file
+## Config specification
 ```json
 {
     "name": "robot_name",
@@ -66,16 +37,22 @@ $ freecad2gazebo <assembly_file> <path/to/model> [--sdf-only] [--noexport] [--co
     },
     "joints_pid": {"p": 20.0, "i": 10.0, "d": 0.0, "i_clamp": 0.0},
     "root_link": "base_link",
-    "ros_package": "humanoid_17dof_description"
+    "ros_package": "humanoid_17dof_description",
+    "sdf_only": false,
+    "export": true
 }
 ```
+
+**sdf_only**: Export only SDF.
+
+**export**: Export mesh files.
+
 
 ## Future plans
 * Extend collada exporter to export materials from assemblies.
 * Create a FreeCAD workbench to interactively assign joints and export to gazebo.
-* Reduce set of design rules by making it more robust and general perpouse.
+* Reduce set of design rules by making it more robust and general purpose.
 * Support any valid structures of assemblies.
 
 [freecad]:https://freecadweb.org
 [a2plus]:https://github.com/kbwbe/A2plus
-[ros]:https://ros.org
