@@ -1,8 +1,194 @@
-from freecad_to_gazebo.conversions import *
-import FreeCAD
+import FreeCAD, Mesh, os, numpy as np
+import yaml
+import argparse
+import collada
 from xml.etree import ElementTree as ET
 from xml.dom.minidom import parseString
+from math import radians as _radians
 
+
+def export_gazebo_model(model_dir, configs={}):
+    doc = FreeCAD.activeDocument()
+    assembly_dir = os.path.split(doc.FileName)[0]
+    scale = configs.get('scale', 0.001)
+    scale_vec = FreeCAD.Vector([scale]*3)
+
+    for obj in doc.Objects:
+        if obj.isDerivedFrom("Part::Feature"):
+            name = obj.Label
+            density = configs.get('density', 1000)
+
+            bounding_box = obj.Shape.BoundBox
+            bounding_box.scale(*scale_vec)
+
+            global_pose_base = FreeCAD.Vector(bounding_box.XLength/2,
+                                         bounding_box.YLength/2,
+                                         bounding_box.ZLength/2)
+            global_pose_base -= bounding_box.Center
+            global_pose = FreeCAD.Placement()
+            global_pose.Base = global_pose_base
+
+            model = Model(name=name, pose=global_pose)
+            model.self_collide = False
+            model.sdf_version = '1.5'
+
+            shape = obj.Shape
+            mass = shape.Mass * scale**3 * density
+            com = shape.CenterOfMass * scale
+            inr = shape.MatrixOfInertia
+            inr.scale(*scale_vec*(scale**4) * density)
+            placement = shape.Placement
+            placement.Base.scale(*scale_vec)
+
+            mesh_file = os.path.join(model_dir, name, 'meshes')
+            mesh_file = os.path.splitext(mesh_file)[0] + name + '.dae'
+            mesh_dir = os.path.split(mesh_file)[0]
+
+            os.makedirs(mesh_dir, exist_ok=True)
+            export_collada(doc, [obj], mesh_file, scale=scale, offset=com*-1)
+
+            pose = placement.copy()
+            pose.Base = com
+
+            pose_rpy = pose.copy()
+            pose_rpy.Base=(np.zeros(3))
+
+
+            inertia = Inertia(inertia=np.array(inr.A)[[0,1,2,5,6,10]])
+            inertial = Inertial(pose=pose_rpy,
+                                mass=mass,
+                                inertia=inertia)
+
+            package = configs.get('ros_package', name)
+            mesh_uri = os.path.join(package,
+                                    os.path.relpath(mesh_file, model_dir))
+            mesh_uri = os.path.normpath(mesh_uri)
+
+            visual = Visual(name=name+'_visual', mesh=mesh_uri)
+            collision = Collision(name=name+'_collision', mesh=mesh_uri)
+
+            link = Link(name=name,
+                        pose=pose,
+                        inertial=inertial,
+                        visual=visual,
+                        collision=collision)
+            model.links.append(link)
+
+            with open(os.path.join(model_dir, name+'.sdf'), 'w') as sdf_file:
+                sdf_file.write(model.to_xml_string('sdf'))
+
+
+###################################################################
+# Export helpers
+###################################################################
+
+
+
+def export_collada(doc, exportList, filename, scale=1, quality=1, offset=np.zeros(3)):
+    '''FreeCAD collada exporter
+    doc - FreeCAD document
+    exportList - list of objects from doc
+    scale - scaling factor for the mesh
+    quality - mesh tessellation quality
+    offset - offset of the origin of the resulting mesh'''
+
+    colmesh = collada.Collada()
+    colmesh.assetInfo.upaxis = collada.asset.UP_AXIS.Z_UP
+    objind = 0
+    scenenodes = []
+
+    for obj in exportList:
+        bHandled = False
+        if obj.isDerivedFrom("Part::Feature"):
+            bHandled = True
+            m = obj.Shape.tessellate(quality)
+            vindex = []
+            nindex = []
+            findex = []
+            # vertex indices
+            for v in m[0]:
+                vindex.extend([a*scale+b for a, b in zip(v, offset)])
+            # normals
+            for f in obj.Shape.Faces:
+                n = f.normalAt(0,0)
+                for i in range(len(f.tessellate(quality)[1])):
+                    nindex.extend([n.x,n.y,n.z])
+            # face indices
+            for i in range(len(m[1])):
+                f = m[1][i]
+                findex.extend([f[0],i,f[1],i,f[2],i])
+        elif obj.isDerivedFrom("Mesh::Feature"):
+            bHandled = True
+            print("exporting mesh ",obj.Name, obj.Mesh)
+            m = obj.Mesh
+            vindex = []
+            nindex = []
+            findex = []
+            # vertex indices
+            for v in m.Topology[0]:
+                vindex.extend([a*scale+b for a, b in zip(v, offset)])
+            # normals
+            for f in m.Facets:
+                n = f.Normal
+                nindex.extend([n.x,n.y,n.z])
+            # face indices
+            for i in range(len(m.Topology[1])):
+                f = m.Topology[1][i]
+                findex.extend([f[0],i,f[1],i,f[2],i])
+
+        if bHandled:
+            vert_src = collada.source.FloatSource("cubeverts-array"+str(objind),
+                                                  np.array(vindex),
+                                                  ('X', 'Y', 'Z'))
+            normal_src = collada.source.FloatSource("cubenormals-array"+str(objind),
+                                                    np.array(nindex),
+                                                    ('X', 'Y', 'Z'))
+            geom = collada.geometry.Geometry(colmesh,
+                                             "geometry"+str(objind),
+                                             obj.Label,
+                                             [vert_src, normal_src])
+
+            input_list = collada.source.InputList()
+            input_list.addInput(0, 'VERTEX', "#cubeverts-array"+str(objind))
+            input_list.addInput(1, 'NORMAL', "#cubenormals-array"+str(objind))
+            triset = geom.createTriangleSet(np.array(findex),
+                                            input_list,
+                                            "materialref")
+            geom.primitives.append(triset)
+            colmesh.geometries.append(geom)
+
+            geomnode = collada.scene.GeometryNode(geom)
+            node = collada.scene.Node("node"+str(objind), children=[geomnode])
+
+            #TODO: Add materials handling
+            scenenodes.append(node)
+
+        objind += 1
+
+    scene = collada.scene.Scene("scene", scenenodes)
+    colmesh.scenes.append(scene)
+    colmesh.scene = scene
+
+    colmesh.write(filename)
+    print("file %s successfully created\n" % filename)
+
+
+###################################################################
+# Conversion Helpers
+###################################################################
+
+def deg2rad(d):
+    '''Converts degrees to radians'''
+    return _radians(d)
+
+def flt2str(f):
+    '''Converts floats to formatted string'''
+    return '{:.6f}'.format(f)
+
+
+###################################################################
+# Model Helpers
+###################################################################
 
 def add_poses(p1, p2):
     return FreeCAD.Placement(p1.toMatrix() + p2.toMatrix())
