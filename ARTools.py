@@ -49,7 +49,7 @@ def boundingBox2list(bb, scale=1e-3):
 
 def principalProperties2dict(pp, scale=1e-3):
     npp = {}
-    for key, value in pp.iteritems():
+    for key, value in pp.items():
         if type(value) is FreeCAD.Vector:
             npp[key.lower()] = vector2list(value, scale=1e-3)
         else:
@@ -179,7 +179,7 @@ def exportPartInfo(obj, ofile):
         ofile = ofile + ".json"
 
     partprops = getLocalPartProps(obj)
-    with open(ofile, "wb") as propfile:
+    with open(ofile, "w", encoding="utf8") as propfile:
         json.dump(partprops, propfile, indent=1, separators=(',', ': '))
     return True
 
@@ -192,11 +192,11 @@ def appendPartInfo(obj, ofile):
     For more information on principal properties, see TopoShape in OCCT
     documentation.
     """
-    with open(ofile, "rb") as propfile:
+    with open(ofile, "r", encoding="utf8") as propfile:
         partprops = json.load(propfile)
     new_props = getLocalPartProps(obj)
     partprops.update(new_props)
-    with open(ofile, "wb") as propfile:
+    with open(ofile, "w", encoding="utf8") as propfile:
         json.dump(partprops, propfile, indent=1, separators=(',', ': '))
     return True
 
@@ -205,7 +205,7 @@ def exportFeatureFrames(obj, ofile):
     """Exports feature frames attached to a part."""
     # Get the feature frames
     import ARFrames
-    ff_check = lambda x: isinstance(x.Proxy, ARFrames.FeatureFrame)
+    ff_check = lambda x: isinstance(x.Proxy, ARFrames.FeatureFrame) if hasattr(x, 'Proxy') else False
     ff_list = filter(ff_check, obj.InList)
     ff_named = {ff.Label: ff.Proxy.getDict() for ff in ff_list}
     feature_dict = {"features": ff_named}
@@ -216,7 +216,7 @@ def exportFeatureFrames(obj, ofile):
         os.makedirs(odir)
     if not of.lower().endswith(".json"):
         ofile = ofile + ".json"
-    with open(ofile, "wb") as propfile:
+    with open(ofile, "w", encoding="utf8") as propfile:
         json.dump(feature_dict, propfile, indent=1, separators=(',', ': '))
     return True
 
@@ -226,9 +226,9 @@ def appendFeatureFrames(obj, ofile):
     file."""
     # Get the feature frames
     import ARFrames
-    with open(ofile, "rb") as propfile:
+    with open(ofile, "r", encoding="utf8") as propfile:
         partprops = json.load(propfile)
-    ff_check = lambda x: isinstance(x.Proxy, ARFrames.FeatureFrame)
+    ff_check = lambda x: isinstance(x.Proxy, ARFrames.FeatureFrame) if hasattr(x, 'Proxy') else False 
     ff_list = filter(ff_check, obj.InList)
     ff_named = {ff.Label: ff.Proxy.getDict() for ff in ff_list}
     feature_dict = {"features": ff_named}
@@ -236,7 +236,7 @@ def appendFeatureFrames(obj, ofile):
         partprops.update(feature_dict)
     else:
         partprops["features"].update(feature_dict["features"])
-    with open(ofile, "wb") as propfile:
+    with open(ofile, "w", encoding="utf8") as propfile:
         json.dump(partprops, propfile, indent=1, separators=(',', ': '))
     return True
 
@@ -270,10 +270,8 @@ def exportPartInfoDialogue():
     if os.path.exists(ofile):
         msgbox = QtGui.QMessageBox()
         msgbox.setText("File already exists. We can overwrite the file, or add the information/rewrite only relevant sections.")
-        append_button = msgbox.addButton(unicode("Append"),
-                                         QtGui.QMessageBox.YesRole)
-        overwrite_button = msgbox.addButton(unicode("Overwrite"),
-                                            QtGui.QMessageBox.NoRole)
+        append_button = msgbox.addButton("Append", QtGui.QMessageBox.YesRole)
+        overwrite_button = msgbox.addButton("Overwrite", QtGui.QMessageBox.NoRole)
         msgbox.exec_()
         if msgbox.clickedButton() == append_button:
             NEWFILE = False
@@ -296,6 +294,7 @@ def exportPartInfoDialogue():
 def exportFeatureFramesDialogue():
     """Spawns a dialogue window for a part's feature frames to be exported."""
     # Select only true parts
+    import ARFrames
     s = FreeCADGui.Selection.getSelection()
     FreeCADGui.Selection.clearSelection()
     if len(s) == 0:
@@ -303,7 +302,7 @@ def exportFeatureFramesDialogue():
         return False
     unique_selected = []
     for item in s:
-        if item not in unique_selected and isinstance(item, Part.Feature):
+        if item not in unique_selected and isinstance(item.Proxy, ARFrames.FeatureFrame):
             # Ensuring that we are parts
             unique_selected.append(item)
             FreeCADGui.Selection.addSelection(item)
@@ -322,10 +321,8 @@ def exportFeatureFramesDialogue():
     if os.path.exists(ofile):
         msgbox = QtGui.QMessageBox()
         msgbox.setText("File already exists. We can overwrite the file, or add the information/rewrite only relevant sections.")
-        append_button = msgbox.addButton(unicode("Append"),
-                                         QtGui.QMessageBox.YesRole)
-        overwrite_button = msgbox.addButton(unicode("Overwrite"),
-                                            QtGui.QMessageBox.NoRole)
+        append_button = msgbox.addButton("Append", QtGui.QMessageBox.YesRole)
+        overwrite_button = msgbox.addButton("Overwrite", QtGui.QMessageBox.NoRole)
         msgbox.exec_()
         if msgbox.clickedButton() == append_button:
             NEWFILE = False
@@ -346,17 +343,19 @@ def exportFeatureFramesDialogue():
 
 def exportPartInfoAndFeaturesDialogue():
     """Spawns a dialogue window for exporting both."""
+    import ARFrames
     s = FreeCADGui.Selection.getSelection()
     FreeCADGui.Selection.clearSelection()
     if len(s) == 0:
-        FreeCAD.Console.PrintError("No part selected.")
+        FreeCAD.Console.PrintError("No part selected")
         return False
     unique_selected = []
     for item in s:
-        if item not in unique_selected and isinstance(item, Part.Feature):
+        if item not in unique_selected:
             # Ensuring that we are parts
             unique_selected.append(item)
             FreeCADGui.Selection.addSelection(item)
+            FreeCAD.Console.PrintMessage("Added for export "+str(item.FullName)+"\n")
     # Fix wording
     textprompt = "Save the part info and feature frames attached to the part"
     if len(unique_selected) > 1:
@@ -372,10 +371,8 @@ def exportPartInfoAndFeaturesDialogue():
     if os.path.exists(ofile):
         msgbox = QtGui.QMessageBox()
         msgbox.setText("File already exists. We can overwrite the file, or add the information/rewrite only relevant sections.")
-        append_button = msgbox.addButton(unicode("Append"),
-                                         QtGui.QMessageBox.YesRole)
-        overwrite_button = msgbox.addButton(unicode("Overwrite"),
-                                            QtGui.QMessageBox.NoRole)
+        append_button = msgbox.addButton("Append", QtGui.QMessageBox.YesRole)
+        overwrite_button = msgbox.addButton("Overwrite", QtGui.QMessageBox.NoRole)
         msgbox.exec_()
         if msgbox.clickedButton() == append_button:
             NEWFILE = False
