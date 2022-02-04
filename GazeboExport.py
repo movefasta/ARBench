@@ -7,7 +7,7 @@ from xml.dom.minidom import parseString
 from math import radians as _radians
 
 
-def export_gazebo_model(model_dir, configs={}):
+def export_gazebo_model(export_dir, configs={}):
     doc = FreeCAD.activeDocument()
     assembly_dir = os.path.split(doc.FileName)[0]
     scale = configs.get('scale', 0.001)
@@ -40,9 +40,9 @@ def export_gazebo_model(model_dir, configs={}):
             placement = shape.Placement
             placement.Base.scale(*scale_vec)
 
-            mesh_file = os.path.join(model_dir, name, 'meshes')
-            mesh_file = os.path.splitext(mesh_file)[0] + name + '.dae'
-            mesh_dir = os.path.split(mesh_file)[0]
+            model_dir = os.path.join(export_dir, name)
+            mesh_dir = os.path.join(model_dir, 'meshes')
+            mesh_file = os.path.join(mesh_dir, name + '.dae')
 
             os.makedirs(mesh_dir, exist_ok=True)
             export_collada(doc, [obj], mesh_file, scale=scale, offset=com*-1)
@@ -59,9 +59,7 @@ def export_gazebo_model(model_dir, configs={}):
                                 mass=mass,
                                 inertia=inertia)
 
-            package = configs.get('ros_package', name)
-            mesh_uri = os.path.join(package,
-                                    os.path.relpath(mesh_file, model_dir))
+            mesh_uri = os.path.relpath(mesh_file, export_dir)
             mesh_uri = os.path.normpath(mesh_uri)
 
             visual = Visual(name=name+'_visual', mesh=mesh_uri)
@@ -74,9 +72,11 @@ def export_gazebo_model(model_dir, configs={}):
                         collision=collision)
             model.links.append(link)
 
-            with open(os.path.join(model_dir, name+'.sdf'), 'w') as sdf_file:
+            with open(os.path.join(model_dir, 'model.sdf'), 'w') as sdf_file:
                 sdf_file.write(model.to_xml_string('sdf'))
 
+            with open(os.path.join(model_dir, 'model.config'), 'w') as config_file:
+                config_file.write(config(name, 'model.sdf', doc.CreatedBy, 'email', doc.Comment, 'version'))
 
 ###################################################################
 # Export helpers
@@ -217,6 +217,28 @@ def pose_xyz(pose):
     '''Returns the xyz/Base portion of a pose as string'''
     xyz = pose.Base if hasattr(pose, 'Base') else pose
     return ' '.join([flt2str(i) for i in xyz])
+
+def config(model_name, sdf, author, email, desc, version):
+    top = ET.Element('model')
+    name = ET.SubElement(top, 'name')
+    name.text = model_name
+    ver = ET.SubElement(top, 'version')
+    ver.text = version
+    sdf_file = ET.SubElement(top, 'sdf')
+    sdf_file.text = sdf
+    sdf_file.set('version', '1.5')
+
+    author_tag = ET.SubElement(top, 'author')
+    author_name = ET.SubElement(author_tag, 'name')
+    author_name.text = author
+    email_address = ET.SubElement(author_tag, 'email')
+    email_address.text = email
+
+    description = ET.SubElement(top, 'description')
+    description.text = desc
+
+    dom = parseString(ET.tostring(top, encoding="unicode"))
+    return dom.toprettyxml(indent=' '*2)
 
 
 class SpatialEntity(object):
