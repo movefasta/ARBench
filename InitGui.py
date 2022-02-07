@@ -14,7 +14,8 @@ class ARBench(Workbench):
         self.framecommands = ["FrameCommand",
                               "AllPartFramesCommand",
                               "FeatureFrameCommand"]
-        self.toolcommands = ["ExportPartInfoAndFeaturesDialogueCommand"]
+        self.toolcommands = ["ExportPartInfoAndFeaturesDialogueCommand",
+                            "ExportGazeboModels"]
         self.appendToolbar("AR Frames", self.framecommands)
         self.appendToolbar("AR Tools", self.toolcommands)
 

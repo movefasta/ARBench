@@ -1,5 +1,8 @@
 ![implementation preview](https://raw.githubusercontent.com/mahaarbo/ARBench/master/UI/icons/github_preview.png)
 # Arbench
+
+---___!!! USE WITH CAUTION! Plugin on heavy developement !!!___---
+
 Annotation for robotics bench. A FreeCAD workbench for annotating frames of interest, exporting these w.r.t. the part frame, and exporting part information.
 
 # Installation instructions
@@ -19,6 +22,8 @@ This workbench supports versions of FreeCAD>0.16.
 
 # Usage
 
+## Export meta-data for part's feature frames
+
 1. Click a small feature e.g. a circle
 2. Press the feature frame creator (cone with a magnifying glass on it icon)
 3. Chose type of feature to create
@@ -29,41 +34,15 @@ This workbench supports versions of FreeCAD>0.16.
 8. Use the json with whatever you want. E.g. [`arbench_part_publisher`](https://github.com/mahaarbo/arbench_part_publisher)
 
 
-# Freecad to Gazebo exporter
+## Generate part's model packages for Gazebo simulator
 
-To generate SDF and URDF model from freecad assembly use python call:
-
-```python
-freecad_exporter.export_gazebo_model(freecad_assembly_file, model_destination_folder, config)
+To generate SDF model packages from FreeCAD Document just press "Gazebo Export" button in ARBench UI. It will create folder for every `Solid` part in Document (`Compound` parts currently doesn't supported) with such structure
 ```
-Note: Only links and joints are generated in the SDF model. To use the model with ros, use the URDF model.
+name_of_part
+├── model.sdf
+├── meshes
+│   └── part.dae
+└── model.config
 
-## Config specification
-```json
-{
-    "name": "robot_name",
-    "joints_limits": {"upper": 90, "lower": -90, "effort": 10, "velocity": 5},
-    "transmission": {
-        "type": "transmission_interface/SimpleTransmission",
-        "hardware_interface": "hardware_interface/PositionJointInterface"
-    },
-    "joints_config": {
-        "type": "position_controllers/JointGroupPositionController",
-        "grouped": true
-    },
-    "joints_pid": {"p": 20.0, "i": 10.0, "d": 0.0, "i_clamp": 0.0},
-    "root_link": "base_link",
-    "ros_package": "humanoid_17dof_description",
-    "sdf_only": false,
-    "export": true
-}
 ```
-
-**sdf_only**: Export only SDF.
-
-**export**: Export mesh files.
-
-## Future plans
-* Extend collada exporter to export materials from assemblies.
-* Create a FreeCAD workbench to interactively assign joints and export to gazebo.
-* Support any valid structures of assemblies.
+This packages will placed by default in your FreeCAD Document's folder and could be moved to gazebo model's folder for using them in sumulator.

@@ -394,6 +394,16 @@ def exportPartInfoAndFeaturesDialogue():
                                  + str(unique_selected[0].Label)
                                  + " exported to " + str(ofile) + "\n")
 
+def exportGazeboModels():
+    import GazeboExport
+    doc = FreeCAD.activeDocument()
+    for obj in doc.Objects:
+        """Export solid shapes."""
+        if (isinstance(obj.Shape, Part.Solid) if hasattr(obj, 'Shape') else False):
+            GazeboExport.export_gazebo_model(obj, os.path.split(doc.FileName)[0], configs={})
+        elif isinstance(obj, Part.Feature):
+            FreeCAD.Console.PrintMessage('{0} part is not valid. It has a Compound type, but Solids there are hidden. Please convert it to single Solid'.format(obj.Label))
+
 
 ###################################################################
 # GUI Commands
@@ -401,11 +411,18 @@ def exportPartInfoAndFeaturesDialogue():
 uidir = os.path.join(FreeCAD.getUserAppDataDir(),
                      "Mod", __workbenchname__, "UI")
 icondir = os.path.join(uidir, "icons")
+
 spawnClassCommand("ExportPartInfoAndFeaturesDialogueCommand",
                   exportPartInfoAndFeaturesDialogue,
                   {"Pixmap": str(os.path.join(icondir, "parttojson.svg")),
                    "MenuText": "Export info and featureframes",
                    "ToolTip": "Export part properties (placement, C.O.M) and feature frames"})
+
+spawnClassCommand("ExportGazeboModels",
+                  exportGazeboModels,
+                  {"Pixmap": str(os.path.join(icondir, "gazeboexport.svg")),
+                   "MenuText": "Export SDF-models to Gazebo",
+                   "ToolTip": "Export SDF-models for all solid parts"})
 
 
 ###################################################################
