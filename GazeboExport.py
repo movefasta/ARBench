@@ -5,78 +5,75 @@ import collada
 from xml.etree import ElementTree as ET
 from xml.dom.minidom import parseString
 from math import radians as _radians
+import Part
 
-
-def export_gazebo_model(export_dir, configs={}):
-    doc = FreeCAD.activeDocument()
-    assembly_dir = os.path.split(doc.FileName)[0]
+def export_gazebo_model(obj, export_dir, configs={}):
+    name = obj.Label
+    
     scale = configs.get('scale', 0.001)
     scale_vec = FreeCAD.Vector([scale]*3)
 
-    for obj in doc.Objects:
-        if obj.isDerivedFrom("Part::Feature"):
-            name = obj.Label
-            density = configs.get('density', 1000)
+    density = configs.get('density', 1000)
 
-            bounding_box = obj.Shape.BoundBox
-            bounding_box.scale(*scale_vec)
+    bounding_box = obj.Shape.BoundBox
+    bounding_box.scale(*scale_vec)
 
-            global_pose_base = FreeCAD.Vector(bounding_box.XLength/2,
-                                         bounding_box.YLength/2,
-                                         bounding_box.ZLength/2)
-            global_pose_base -= bounding_box.Center
-            global_pose = FreeCAD.Placement()
-            global_pose.Base = global_pose_base
+    global_pose_base = FreeCAD.Vector(bounding_box.XLength/2,
+                                 bounding_box.YLength/2,
+                                 bounding_box.ZLength/2)
+    global_pose_base -= bounding_box.Center
+    global_pose = FreeCAD.Placement()
+    global_pose.Base = global_pose_base
 
-            model = Model(name=name, pose=global_pose)
-            model.self_collide = False
-            model.sdf_version = '1.5'
+    model = Model(name=name, pose=global_pose)
+    model.self_collide = False
+    model.sdf_version = '1.5'
 
-            shape = obj.Shape
-            mass = shape.Mass * scale**3 * density
-            com = shape.CenterOfMass * scale
-            inr = shape.MatrixOfInertia
-            inr.scale(*scale_vec*(scale**4) * density)
-            placement = shape.Placement
-            placement.Base.scale(*scale_vec)
+    shape = obj.Shape
+    mass = shape.Mass * scale**3 * density
+    com = shape.CenterOfMass * scale
+    inr = shape.MatrixOfInertia
+    inr.scale(*scale_vec*(scale**4) * density)
+    placement = shape.Placement
+    placement.Base.scale(*scale_vec)
 
-            model_dir = os.path.join(export_dir, name)
-            mesh_dir = os.path.join(model_dir, 'meshes')
-            mesh_file = os.path.join(mesh_dir, name + '.dae')
+    model_dir = os.path.join(export_dir, name)
+    mesh_dir = os.path.join(model_dir, 'meshes')
+    mesh_file = os.path.join(mesh_dir, name + '.dae')
 
-            os.makedirs(mesh_dir, exist_ok=True)
-            export_collada(doc, [obj], mesh_file, scale=scale, offset=com*-1)
+    os.makedirs(mesh_dir, exist_ok=True)
+    export_collada([obj], mesh_file, scale=scale, offset=com*-1)
 
-            pose = placement.copy()
-            pose.Base = com
+    pose = placement.copy()
+    pose.Base = com
 
-            pose_rpy = pose.copy()
-            pose_rpy.Base=(np.zeros(3))
+    pose_rpy = pose.copy()
+    pose_rpy.Base=(np.zeros(3))
 
 
-            inertia = Inertia(inertia=np.array(inr.A)[[0,1,2,5,6,10]])
-            inertial = Inertial(pose=pose_rpy,
-                                mass=mass,
-                                inertia=inertia)
+    inertia = Inertia(inertia=np.array(inr.A)[[0,1,2,5,6,10]])
+    inertial = Inertial(pose=pose_rpy,
+                        mass=mass,
+                        inertia=inertia)
 
-            mesh_uri = os.path.relpath(mesh_file, export_dir)
-            mesh_uri = os.path.normpath(mesh_uri)
+    mesh_uri = os.path.relpath(mesh_file, export_dir)
+    mesh_uri = os.path.normpath(mesh_uri)
 
-            visual = Visual(name=name+'_visual', mesh=mesh_uri)
-            collision = Collision(name=name+'_collision', mesh=mesh_uri)
+    visual = Visual(name=name+'_visual', mesh=mesh_uri)
+    collision = Collision(name=name+'_collision', mesh=mesh_uri)
 
-            link = Link(name=name,
-                        pose=pose,
-                        inertial=inertial,
-                        visual=visual,
-                        collision=collision)
-            model.links.append(link)
+    link = Link(name=name,
+                pose=pose,
+                inertial=inertial,
+                visual=visual,
+                collision=collision)
+    model.links.append(link)
 
-            with open(os.path.join(model_dir, 'model.sdf'), 'w') as sdf_file:
-                sdf_file.write(model.to_xml_string('sdf'))
+    with open(os.path.join(model_dir, 'model.sdf'), 'w') as sdf_file:
+        sdf_file.write(model.to_xml_string('sdf'))
 
-            with open(os.path.join(model_dir, 'model.config'), 'w') as config_file:
-                config_file.write(config(name, 'model.sdf', doc.CreatedBy, 'email', doc.Comment, 'version'))
+    with open(os.path.join(model_dir, 'model.config'), 'w') as config_file:
+        config_file.write(config(name, 'model.sdf', 'Author', 'Email', 'Comment', 'Version'))
 
 ###################################################################
 # Export helpers
@@ -84,10 +81,9 @@ def export_gazebo_model(export_dir, configs={}):
 
 
 
-def export_collada(doc, exportList, filename, scale=1, quality=1, offset=np.zeros(3)):
+def export_collada(exportList, filename, scale=1, quality=1, offset=np.zeros(3)):
     '''FreeCAD collada exporter
-    doc - FreeCAD document
-    exportList - list of objects from doc
+    exportList - list of objects
     scale - scaling factor for the mesh
     quality - mesh tessellation quality
     offset - offset of the origin of the resulting mesh'''
