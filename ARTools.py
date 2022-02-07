@@ -397,7 +397,12 @@ def exportPartInfoAndFeaturesDialogue():
 def exportGazeboModels():
     import GazeboExport
     doc = FreeCAD.activeDocument()
-    GazeboExport.export_gazebo_model(os.path.split(doc.FileName)[0], configs={})
+    for obj in doc.Objects:
+        """Export solid shapes."""
+        if (isinstance(obj.Shape, Part.Solid) if hasattr(obj, 'Shape') else False):
+            GazeboExport.export_gazebo_model(obj, os.path.split(doc.FileName)[0], configs={})
+        elif isinstance(obj, Part.Feature):
+            FreeCAD.Console.PrintMessage('{0} part is not valid. It has a Compound type, but Solids there are hidden. Please convert it to single Solid'.format(obj.Label))
 
 
 ###################################################################
