@@ -1,0 +1,130 @@
+{
+ "Gripper_for_Box": {
+  "Part name": "Box",
+  "Part label": "\u041a\u0443\u0431",
+  "Part position XYZ": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "Part rotation axis XYZ": [
+   0.0,
+   0.0,
+   1.0
+  ],
+  "Part rotation angle": 0.0,
+  "Gripper position XYZ": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "Gripper rotation axis XYZ": [
+   0.0,
+   0.0,
+   1.0
+  ],
+  "Gripper rotation angle": 0.0,
+  "Grip size": 10.0,
+  "OperationType": 0,
+  "Operation Priority": 0,
+  "a.Operation Parameter 1": 0.0,
+  "a.Operation Parameter 2": 0.0,
+  "a.Operation Parameter 3": 0.0
+ },
+ "Gripper_for_Cylinder": {
+  "Part name": "Cylinder",
+  "Part label": "\u0426\u0438\u043b\u0438\u043d\u0434\u0440",
+  "Part position XYZ": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "Part rotation axis XYZ": [
+   0.0,
+   0.0,
+   1.0
+  ],
+  "Part rotation angle": 0.0,
+  "Gripper position XYZ": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "Gripper rotation axis XYZ": [
+   1.0,
+   0.0,
+   0.0
+  ],
+  "Gripper rotation angle": 4.1887902047863905,
+  "Grip size": 3.9708354963922163,
+  "OperationType": 0,
+  "Operation Priority": 0,
+  "a.Operation Parameter 1": 0.0,
+  "a.Operation Parameter 2": 0.0,
+  "a.Operation Parameter 3": 0.0
+ },
+ "Gripper_for_Box001": {
+  "Part name": "Box001",
+  "Part label": "\u041a\u0443\u0431001",
+  "Part position XYZ": [
+   0.0,
+   9.0,
+   0.0
+  ],
+  "Part rotation axis XYZ": [
+   0.0,
+   0.0,
+   1.0
+  ],
+  "Part rotation angle": 0.0,
+  "Gripper position XYZ": [
+   3.8035643556662895,
+   99.89718356183919,
+   -9.331967349091768
+  ],
+  "Gripper rotation axis XYZ": [
+   -0.6901619708141958,
+   0.717463959241293,
+   0.09445592216305763
+  ],
+  "Gripper rotation angle": 3.570126372396101,
+  "Grip size": 20.0,
+  "OperationType": 0,
+  "Operation Priority": 0,
+  "a.Operation Parameter 1": 0.0,
+  "a.Operation Parameter 2": 0.0,
+  "a.Operation Parameter 3": 0.0
+ },
+ "Gripper_for_Tube": {
+  "Part name": "Tube",
+  "Part label": "Tube",
+  "Part position XYZ": [
+   0.0,
+   370.0,
+   10.0
+  ],
+  "Part rotation axis XYZ": [
+   1.0,
+   0.0,
+   0.0
+  ],
+  "Part rotation angle": 1.5707963267948966,
+  "Gripper position XYZ": [
+   0.0,
+   345.0,
+   10.0
+  ],
+  "Gripper rotation axis XYZ": [
+   1.0,
+   0.0,
+   0.0
+  ],
+  "Gripper rotation angle": 1.5707963267948966,
+  "Grip size": 50.0,
+  "OperationType": 0,
+  "Operation Priority": 0,
+  "a.Operation Parameter 1": 0.0,
+  "a.Operation Parameter 2": 0.0,
+  "a.Operation Parameter 3": 0.0
+ }
+}
