@@ -1,7 +1,13 @@
 # MACRO 1:
 # Select part and run it to insert gripper pose (red)
 # Select gripper body and run it to insert second pose (pre-gripper, blue) 
-# Select pre-gripper body and run it to insert 3D pronter table (green)
+# Select pre-gripper body and run it to insert 3D printer table (green)
+
+# Current gripper 
+# https://gitlab.com/robosphere/robossembler-ros2/-/blob/71938716043c35689a1058b29cefb1997a8bcf0a/rasmt_support/meshes/collision/Grip_Body.STL
+# https://gitlab.com/robosphere/robossembler-ros2/-/blob/71938716043c35689a1058b29cefb1997a8bcf0a/rasmt_support/meshes/collision/Grip_L.STL
+# https://gitlab.com/robosphere/robossembler-ros2/-/blob/71938716043c35689a1058b29cefb1997a8bcf0a/rasmt_support/meshes/collision/Grip_R.STL
+# https://gitlab.com/robosphere/robossembler-ros2/-/blob/71938716043c35689a1058b29cefb1997a8bcf0a/rasmt_support/urdf/tools/rasmt_hand_macro.xacro
 
 def controlled_insert(code):
 	a=App.ActiveDocument.Objects
@@ -83,57 +89,6 @@ if len(Gui.Selection.getSelection())>0:
 		b.GripSize=active_body.Shape.BoundBox.YLength
 		b.Container.Placement=active_body.getGlobalPlacement()
 		b.Container.Label = 'Gripper_for_'+b.PartToHandle.Name
-
-# MACRO 2:
-#Exports all grasp poses to json file
-
-import json  # For exporting part infos
-import os    # for safer path handling
-
-if FreeCAD.GuiUp:
-    import FreeCADGui
-    from PySide import QtGui
-
-opts = QtGui.QFileDialog.DontConfirmOverwrite
-
-ofile, filt = QtGui.QFileDialog.getSaveFileName(None, 'test',
-                                                os.getenv("HOME"),
-                                                "*.json", options=opts)
-odir, of = os.path.split(ofile)
-if not os.path.exists(odir):
-    os.makedirs(odir)
-if not of.lower().endswith(".json"):
-    ofile = ofile + ".json"
-
-mp={}
-
-for a in App.ActiveDocument.Objects:
-		if "IsMainPosition" in a.PropertiesList:
-			pp={}
-			pp['Part name'] = a.PartToHandle.Name
-			pp['Part label'] = a.PartToHandle.Label
-
-			papb=a.PartToHandle.Placement.Base
-			pp['Part position XYZ'] = [papb.x,papb.y,papb.z]
-			papa=a.PartToHandle.Placement.Rotation.Axis
-			pp['Part rotation axis XYZ'] = [papa.x,papa.y,papa.z]
-			pp['Part rotation angle'] = a.PartToHandle.Placement.Rotation.Angle
-
-			apb=a.Container.Placement.Base
-			pp['Gripper position XYZ'] = [apb.x,apb.y,apb.z]
-			apa=a.Container.Placement.Rotation.Axis
-			pp['Gripper rotation axis XYZ'] = [apa.x,apa.y,apa.z]
-			pp['Gripper rotation angle'] = a.Container.Placement.Rotation.Angle
-			pp['Grip size'] = a.GripSize
-			pp['OperationType'] = a.OperationType
-			pp['Operation Priority'] = a.OperationPriority
-			pp['a.Operation Parameter 1'] = a.OperationParameter1
-			pp['a.Operation Parameter 2'] = a.OperationParameter2
-			pp['a.Operation Parameter 3'] = a.OperationParameter3
-			mp[a.Container.Label]=pp
-
-with open(ofile, "w", encoding="utf8") as propfile:
-    json.dump(mp, propfile, indent=1, separators=(',', ': '))
 
 # MACRO 3:
 # Select pre-gripper body and run it to animate its movement

@@ -31,6 +31,20 @@ def matrix2list(mat, scale=1e-3):
             [mat.A31, mat.A32, mat.A33, mat.A34*scale],
             [mat.A41, mat.A42, mat.A43, mat.A44]]
 
+def placement2pose(pl, scale=1e-3):
+    """Gives the placement as an dictionary for geometry_msgs/Pose type."""
+    return {"position": {
+                "x": pl.Base.x*scale, 
+                "y": pl.Base.y*scale, 
+                "z": pl.Base.z*scale 
+                },
+            "orientation": {
+                "x": pl.Rotation.Axis.x,
+                "y": pl.Rotation.Axis.y,
+                "z": pl.Rotation.Axis.z,
+                "w": pl.Rotation.Angle
+                }
+            }
 
 def placement2axisvec(pl, scale=1e-3):
     """Gives the placement as an dictionary of origin and rotation.
@@ -149,14 +163,50 @@ def getLocalPartProps(obj):
     # Part properties
     partprops = {
         "label": obj.Label,
-        "placement": placement2axisvec(old_placement),
-        "boundingbox": boundingBox2list(obj.Shape.BoundBox),
-        "volume": obj.Shape.Volume*1e-9,
-        "centerofmass": vector2list(obj.Shape.CenterOfMass),
-        "principalproperties": principalProperties2dict(obj.Shape.PrincipalProperties)
+        "placement": placement2pose(old_placement),
+        # "boundingbox": boundingBox2list(obj.Shape.BoundBox),
+        # "volume": obj.Shape.Volume*1e-9,
+        # "centerofmass": vector2list(obj.Shape.CenterOfMass),
+        # "principalproperties": principalProperties2dict(obj.Shape.PrincipalProperties)
     }
     obj.Placement = old_placement
     return partprops
+
+#    if "IsMainPosition" in obj.PropertiesList:
+
+def getGraspPoseProps(obj):
+    # part = obj.PartToHandle
+    partprops = getLocalPartProps(obj.PartToHandle)
+    grasppose = { obj.Container.Label: {
+        "placement": placement2pose(obj.Container.Placement),
+        "distance": obj.GripSize
+        # "OperationType" : obj.OperationType
+        # "Operation Priority" : obj.OperationPriority
+        # obj.Operation Parameter 1 : obj.OperationParameter1
+        # obj.Operation Parameter 2 : obj.OperationParameter2
+        # obj.Operation Parameter 3 : obj.OperationParameter3
+
+        }
+    }
+    graspposes = {"features": {"grasp-poses": grasppose }}
+    partprops.update(graspposes)
+
+    opts = QtGui.QFileDialog.DontConfirmOverwrite
+
+    ofile, filt = QtGui.QFileDialog.getSaveFileName(None, 'test',
+                                                    os.getenv("HOME"),
+                                                    "*.json", options=opts)
+    odir, of = os.path.split(ofile)
+    if not os.path.exists(odir):
+        os.makedirs(odir)
+    if not of.lower().endswith(".json"):
+        ofile = ofile + ".json"
+
+
+    with open(ofile, "w", encoding="utf8") as propfile:
+        json.dump(partprops, propfile, indent=1, separators=(',', ': '))
+
+
 
 
 ###################################################################
