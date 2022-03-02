@@ -2,6 +2,7 @@ import FreeCAD
 import Part
 import json  # For exporting part infos
 import os    # for safer path handling
+import GazeboExport
 if FreeCAD.GuiUp:
     import FreeCADGui
     from PySide import QtGui
@@ -172,46 +173,102 @@ def getLocalPartProps(obj):
     obj.Placement = old_placement
     return partprops
 
-#    if "IsMainPosition" in obj.PropertiesList:
+# Longest match for mesh name
 
-def getGraspPoseProps(obj):
-    # part = obj.PartToHandle
-    partprops = getLocalPartProps(obj.PartToHandle)
-    grasppose = { obj.Container.Label: {
-        "placement": placement2pose(obj.Container.Placement),
-        "distance": obj.GripSize
-        # "OperationType" : obj.OperationType
-        # "Operation Priority" : obj.OperationPriority
-        # obj.Operation Parameter 1 : obj.OperationParameter1
-        # obj.Operation Parameter 2 : obj.OperationParameter2
-        # obj.Operation Parameter 3 : obj.OperationParameter3
+def longest_match(seq1, seq2):
+    from difflib import SequenceMatcher as SM
 
-        }
-    }
-    graspposes = {"features": {"grasp-poses": grasppose }}
-    partprops.update(graspposes)
-
-    opts = QtGui.QFileDialog.DontConfirmOverwrite
-
-    ofile, filt = QtGui.QFileDialog.getSaveFileName(None, 'test',
-                                                    os.getenv("HOME"),
-                                                    "*.json", options=opts)
-    odir, of = os.path.split(ofile)
-    if not os.path.exists(odir):
-        os.makedirs(odir)
-    if not of.lower().endswith(".json"):
-        ofile = ofile + ".json"
-
-
-    with open(ofile, "w", encoding="utf8") as propfile:
-        json.dump(partprops, propfile, indent=1, separators=(',', ': '))
-
-
+    sm = SM(lambda c: c in set(' ,'), seq1, seq2)
+    m = sm.find_longest_match(0, len(seq1), 0, len(seq2))
+    return seq1[m.a:m.b]
 
 
 ###################################################################
 # Export functions
 ###################################################################
+
+def exportGazeboModels():
+    """Export packages for Gazebo Simulator."""
+    doc = FreeCAD.activeDocument()
+    selected_objects = FreeCADGui.Selection.getSelection()
+    FreeCADGui.Selection.clearSelection()
+    if len(selected_objects) == 0:
+        FreeCAD.Console.PrintError("No part selected.")
+        return False
+
+    export_dir = QtGui.QFileDialog.getExistingDirectory(None, "Choose Export Directory", 
+                                                        os.path.split(doc.FileName)[0])
+    
+    # Gather the unique shapes, and clone parts
+    unique_objs = []
+    # dict for export parts = {
+    #             partX : { obj1: <obj>, graspposes: {}, mesh: <mesh_uri> },
+    #             partY : { obj2: <obj>, graspposes: {}, mesh: <mesh_uri> } }
+    parts = {}
+    num_objs = 0
+    for obj in doc.Objects:
+        new_shape = True
+        model_dir = os.path.join(export_dir, obj.Label)
+        mesh_dir = os.path.join(model_dir, 'meshes')
+        mesh_file = os.path.join(mesh_dir, obj.Label + '.dae')
+        mesh_uri = os.path.normpath(os.path.relpath(mesh_file, export_dir))
+        # Select only Parts, not Grasp Poses or Gripper
+        if obj.TypeId == "Part::Feature" and not "PartToHandle" in obj.PropertiesList and not "Container" in obj.PropertiesList:
+            num_objs += 1
+            for uobj in unique_objs:
+                if uobj.Shape.isPartner(obj.Shape):
+                    new_shape = False
+                    # parts[obj.Label]["mesh"] += parts[uobj.Label]["mesh"]
+                    parts[obj.Label] = {"obj": obj, 
+                                        "graspposes": {},
+                                        "mesh": parts[uobj.Label]["mesh"]
+                                        }
+            # if Shape is unique export mesh
+            if new_shape:
+                unique_objs.append(obj)
+                parts[obj.Label] = {"obj": obj, "graspposes": {}, "mesh": mesh_file}
+
+    # Add grasp poses to parts dictionary
+    for obj in doc.Objects:
+        if "PartToHandle" in obj.PropertiesList:
+            graspposes = { obj.Container.Label: {
+                            "placement": placement2pose(obj.Container.Placement),
+                            "distance": obj.GripSize
+                            # "OperationType" : obj.OperationType
+                            # "Operation Priority" : obj.OperationPriority
+                            # obj.Operation Parameter 1 : obj.OperationParameter1
+                            # obj.Operation Parameter 2 : obj.OperationParameter2
+                            # obj.Operation Parameter 3 : obj.OperationParameter3
+                            }
+                        }
+            parts[obj.PartToHandle.Label].update({"graspposes" : graspposes})
+
+    # Export assets for selected objects
+    for obj in selected_objects:
+        model_dir = os.path.join(export_dir, obj.Label)
+        mesh_dir = os.path.join(model_dir, 'meshes')
+        os.makedirs(mesh_dir, exist_ok=True)
+
+        GazeboExport.export_collada([obj], parts[obj.Label]["mesh"])
+        GazeboExport.export_sdf({ obj.Label: parts[obj.Label] }, export_dir, obj.Label)
+
+        with open(os.path.join(model_dir, 'model.config'), 'w') as config_file:
+            config_file.write(GazeboExport.config(obj.Label, 
+                'model.sdf', 'Author', 'Email', 'Comment', 'Version'))
+
+        with open(os.path.join(model_dir, 'frames.json'), 'w') as frames_file:
+            # frames_file.write(json.dumps(parts[obj.Label]["graspposes"]))
+            json.dump({"features": { "grasp-poses" : parts[obj.Label]["graspposes"]}},
+                        frames_file, indent=1, separators=(',', ': '))
+
+    return True
+
+        # if (isinstance(obj.Shape, Part.Solid) if hasattr(obj, 'Shape') else False):
+
+        # elif isinstance(obj, Part.Feature):
+        #     FreeCAD.Console.PrintMessage('{0} part is not valid. It has a Compound type, but Solids there are hidden. Please convert it to single Solid'.format(obj.Label))
+
+
 def exportPartInfo(obj, ofile):
     """
     Exports part info to a new json file.
@@ -362,8 +419,7 @@ def exportFeatureFramesDialogue():
         textprompt = textprompt + "s"
     opts = QtGui.QFileDialog.DontConfirmOverwrite
     # Create file dialog
-    ofile, filt = QtGui.QFileDialog.getSaveFileName(None, textprompt,
-                                                    os.getenv("HOME"),
+    ofile, filt = QtGui.QFileDialog.getSaveFileName(None, textprompt, os.getenv("HOME"),
                                                     "*.json", options=opts)
     if ofile == "":
         # User cancelled
@@ -443,16 +499,6 @@ def exportPartInfoAndFeaturesDialogue():
     FreeCAD.Console.PrintMessage("Feature frames of "
                                  + str(unique_selected[0].Label)
                                  + " exported to " + str(ofile) + "\n")
-
-def exportGazeboModels():
-    import GazeboExport
-    doc = FreeCAD.activeDocument()
-    for obj in doc.Objects:
-        """Export solid shapes."""
-        if (isinstance(obj.Shape, Part.Solid) if hasattr(obj, 'Shape') else False):
-            GazeboExport.export_gazebo_model(obj, os.path.split(doc.FileName)[0], configs={})
-        elif isinstance(obj, Part.Feature):
-            FreeCAD.Console.PrintMessage('{0} part is not valid. It has a Compound type, but Solids there are hidden. Please convert it to single Solid'.format(obj.Label))
 
 
 ###################################################################

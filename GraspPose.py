@@ -11,7 +11,7 @@
 
 def controlled_insert(code):
 	a=App.ActiveDocument.Objects
-	Part.insert(u"C:/Users/MariaR/Desktop/"+code+".brep",App.ActiveDocument.Name)
+	Part.insert(u"C:/Users/ibryl/AppData/Roaming/FreeCAD/Mod/ARBench/"+code+".brep",App.ActiveDocument.Name)
 	b=App.ActiveDocument.Objects
 	return list(set(b) - set(a))[0]
 

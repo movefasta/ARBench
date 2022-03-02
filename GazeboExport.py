@@ -7,17 +7,19 @@ from xml.dom.minidom import parseString
 from math import radians as _radians
 import Part
 
-def export_gazebo_model(obj, export_dir, configs={}):
-    name = obj.Label
-    
+# Takes subassembly or parts dictionary { part_label: { "obj": <obj>, "mesh": <meshuri> } }
+# and generate SDF for them
+
+def export_sdf(objects, export_dir, modelname, configs={}):
+    model_dir = os.path.join(export_dir, modelname)
+
     scale = configs.get('scale', 0.001)
     scale_vec = FreeCAD.Vector([scale]*3)
-
     density = configs.get('density', 1000)
 
-    bounding_box = obj.Shape.BoundBox
+    shapes = list(map(lambda x: x["obj"].Shape, objects.values()))
+    bounding_box = Part.makeCompound(shapes).BoundBox
     bounding_box.scale(*scale_vec)
-
     global_pose_base = FreeCAD.Vector(bounding_box.XLength/2,
                                  bounding_box.YLength/2,
                                  bounding_box.ZLength/2)
@@ -25,55 +27,38 @@ def export_gazebo_model(obj, export_dir, configs={}):
     global_pose = FreeCAD.Placement()
     global_pose.Base = global_pose_base
 
-    model = Model(name=name, pose=global_pose)
+    model = Model(name=modelname, pose=global_pose)
     model.self_collide = False
     model.sdf_version = '1.5'
 
-    shape = obj.Shape
-    mass = shape.Mass * scale**3 * density
-    com = shape.CenterOfMass * scale
-    inr = shape.MatrixOfInertia
-    inr.scale(*scale_vec*(scale**4) * density)
-    placement = shape.Placement
-    placement.Base.scale(*scale_vec)
+    for label in objects.keys():
+        shape = objects[label]["obj"].Shape
+        mass = shape.Mass * scale**3 * density
+        com = shape.CenterOfMass * scale
+        inr = shape.MatrixOfInertia
+        inr.scale(*scale_vec*(scale**4) * density)
+        placement = shape.Placement
+        placement.Base.scale(*scale_vec)
+        pose = placement.copy()
+        pose.Base = com
+        pose_rpy = pose.copy()
+        pose_rpy.Base=(np.zeros(3))
+        inertia = Inertia(inertia=np.array(inr.A)[[0,1,2,5,6,10]])
+        inertial = Inertial(pose=pose_rpy, mass=mass, inertia=inertia)
 
-    model_dir = os.path.join(export_dir, name)
-    mesh_dir = os.path.join(model_dir, 'meshes')
-    mesh_file = os.path.join(mesh_dir, name + '.dae')
+        mesh_uri = os.path.normpath(os.path.relpath(objects[label]["mesh"], export_dir))
+        visual = Visual(name=label+'_visual', mesh=mesh_uri)
+        collision = Collision(name=label+'_collision', mesh=mesh_uri)
 
-    os.makedirs(mesh_dir, exist_ok=True)
-    export_collada([obj], mesh_file, scale=scale, offset=com*-1)
-
-    pose = placement.copy()
-    pose.Base = com
-
-    pose_rpy = pose.copy()
-    pose_rpy.Base=(np.zeros(3))
-
-
-    inertia = Inertia(inertia=np.array(inr.A)[[0,1,2,5,6,10]])
-    inertial = Inertial(pose=pose_rpy,
-                        mass=mass,
-                        inertia=inertia)
-
-    mesh_uri = os.path.relpath(mesh_file, export_dir)
-    mesh_uri = os.path.normpath(mesh_uri)
-
-    visual = Visual(name=name+'_visual', mesh=mesh_uri)
-    collision = Collision(name=name+'_collision', mesh=mesh_uri)
-
-    link = Link(name=name,
-                pose=pose,
-                inertial=inertial,
-                visual=visual,
-                collision=collision)
-    model.links.append(link)
+        link = Link(name=label,
+                    pose=pose,
+                    inertial=inertial,
+                    visual=visual,
+                    collision=collision)
+        model.links.append(link)
 
     with open(os.path.join(model_dir, 'model.sdf'), 'w') as sdf_file:
         sdf_file.write(model.to_xml_string('sdf'))
-
-    with open(os.path.join(model_dir, 'model.config'), 'w') as config_file:
-        config_file.write(config(name, 'model.sdf', 'Author', 'Email', 'Comment', 'Version'))
 
 ###################################################################
 # Export helpers
