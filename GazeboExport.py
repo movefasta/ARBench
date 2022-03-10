@@ -66,7 +66,7 @@ def export_sdf(objects, export_dir, modelname, configs={}):
 
 
 
-def export_collada(exportList, filename, scale=1, quality=1, offset=np.zeros(3)):
+def export_collada(exportList, filename, scale=0.001, quality=1, offset=np.zeros(3)):
     '''FreeCAD collada exporter
     exportList - list of objects
     scale - scaling factor for the mesh
