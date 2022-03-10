@@ -256,10 +256,11 @@ def exportGazeboModels():
             config_file.write(GazeboExport.config(obj.Label, 
                 'model.sdf', 'Author', 'Email', 'Comment', 'Version'))
 
-        with open(os.path.join(model_dir, 'frames.json'), 'w') as frames_file:
-            # frames_file.write(json.dumps(parts[obj.Label]["graspposes"]))
-            json.dump({"features": { "grasp-poses" : parts[obj.Label]["graspposes"]}},
-                        frames_file, indent=1, separators=(',', ': '))
+        if len(parts[obj.Label]["graspposes"]) > 0:
+            with open(os.path.join(model_dir, 'frames.json'), 'w') as frames_file:
+                # frames_file.write(json.dumps(parts[obj.Label]["graspposes"]))
+                json.dump({"features": { "grasp-poses" : parts[obj.Label]["graspposes"]}},
+                            frames_file, indent=1, separators=(',', ': '))
 
     return True
 
