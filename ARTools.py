@@ -3,6 +3,7 @@ import Part
 import json  # For exporting part infos
 import os    # for safer path handling
 import GazeboExport
+import GraspPose
 if FreeCAD.GuiUp:
     import FreeCADGui
     from PySide import QtGui
@@ -199,11 +200,9 @@ def exportGazeboModels():
     export_dir = QtGui.QFileDialog.getExistingDirectory(None, "Choose Export Directory", 
                                                         os.path.split(doc.FileName)[0])
     
-    # Gather the unique shapes, and clone parts
+    # Gather the unique shapes, and clone parts as
+    # dict = { partX : { obj1: <obj>, graspposes: {}, placements : {}, mesh: <mesh_uri> } }
     unique_objs = []
-    # dict for export parts = {
-    #             partX : { obj1: <obj>, graspposes: {}, mesh: <mesh_uri> },
-    #             partY : { obj2: <obj>, graspposes: {}, mesh: <mesh_uri> } }
     parts = {}
     num_objs = 0
     for obj in doc.Objects:
@@ -226,14 +225,14 @@ def exportGazeboModels():
             # if Shape is unique export mesh
             if new_shape:
                 unique_objs.append(obj)
-                parts[obj.Label] = {"obj": obj, "graspposes": {}, "mesh": mesh_file}
+                parts[obj.Label] = {"obj": obj, "graspposes": {}, "placements": {}, "mesh": mesh_file}
 
-    # Add grasp poses to parts dictionary
     for obj in doc.Objects:
+        # Add grasp poses to parts dictionary
         if "PartToHandle" in obj.PropertiesList:
             graspposes = { obj.Container.Label: {
                             "placement": placement2pose(obj.Container.Placement),
-                            "distance": obj.GripSize
+                            "distance": obj.GripSize*1e-3
                             # "OperationType" : obj.OperationType
                             # "Operation Priority" : obj.OperationPriority
                             # obj.Operation Parameter 1 : obj.OperationParameter1
@@ -243,31 +242,43 @@ def exportGazeboModels():
                         }
             parts[obj.PartToHandle.Label].update({"graspposes" : graspposes})
 
-    # Export assets for selected objects
-    for obj in selected_objects:
-        model_dir = os.path.join(export_dir, obj.Label)
+        # Add part placement position on Plane surface
+        import ARFrames
+        if hasattr(obj, 'Proxy') and "ShapeType" in obj.PropertiesList:
+            if isinstance(obj.Proxy, ARFrames.FeatureFrame) and obj.ShapeType == 'Face':
+                parts[obj.Part.Label].update({ "placements": { obj.Label: placement2pose(obj.Placement) } })
+
+    # Create SDF package from Parts or other packages
+    def create_package(name, objects, export_dir):
+        model_dir = os.path.join(export_dir, name)
         mesh_dir = os.path.join(model_dir, 'meshes')
         os.makedirs(mesh_dir, exist_ok=True)
 
-        GazeboExport.export_collada([obj], parts[obj.Label]["mesh"])
-        GazeboExport.export_sdf({ obj.Label: parts[obj.Label] }, export_dir, obj.Label)
+        GazeboExport.export_collada(objects, parts[name]["mesh"])
+        GazeboExport.export_sdf({ name: parts[name] }, export_dir, obj.Label)
 
         with open(os.path.join(model_dir, 'model.config'), 'w') as config_file:
-            config_file.write(GazeboExport.config(obj.Label, 
+            config_file.write(GazeboExport.config(name, 
                 'model.sdf', 'Author', 'Email', 'Comment', 'Version'))
 
-        if len(parts[obj.Label]["graspposes"]) > 0:
-            with open(os.path.join(model_dir, 'frames.json'), 'w') as frames_file:
-                # frames_file.write(json.dumps(parts[obj.Label]["graspposes"]))
-                json.dump({"features": { "grasp-poses" : parts[obj.Label]["graspposes"]}},
-                            frames_file, indent=1, separators=(',', ': '))
+        with open(os.path.join(model_dir, 'frames.json'), 'w') as frames_file:
+            json.dump({"label": name,
+                        "placement": placement2pose(parts[name]["obj"].Placement),
+                        "features": 
+                            { "graspposes" : parts[name]["graspposes"]
+                            , "placements" : parts[name]["placements"]}},
+                        frames_file, indent=1, separators=(',', ': '))
+
+
+    # Export assets for parts
+    for obj in selected_objects:
+        create_package(obj.Label, [obj], export_dir)
+
+    # Export asset for subassembly
+    # subasm_name = "_".join(list(map(lambda x: x.Label[:8], selected_objects)))
+    # create_package(subasm_name, selected_objects, export_dir)
 
     return True
-
-        # if (isinstance(obj.Shape, Part.Solid) if hasattr(obj, 'Shape') else False):
-
-        # elif isinstance(obj, Part.Feature):
-        #     FreeCAD.Console.PrintMessage('{0} part is not valid. It has a Compound type, but Solids there are hidden. Please convert it to single Solid'.format(obj.Label))
 
 
 def exportPartInfo(obj, ofile):
@@ -315,8 +326,8 @@ def exportFeatureFrames(obj, ofile):
     import ARFrames
     ff_check = lambda x: isinstance(x.Proxy, ARFrames.FeatureFrame) if hasattr(x, 'Proxy') else False
     ff_list = filter(ff_check, obj.InList)
-    ff_named = {ff.Label: ff.Proxy.getDict() for ff in ff_list}
-    feature_dict = {"features": ff_named}
+    ff_named = { ff.Label: ff.Proxy.getDict() for ff in ff_list }
+    feature_dict = { "features": ff_named }
 
     # File stuff
     odir, of = os.path.split(ofile)
@@ -338,8 +349,8 @@ def appendFeatureFrames(obj, ofile):
         partprops = json.load(propfile)
     ff_check = lambda x: isinstance(x.Proxy, ARFrames.FeatureFrame) if hasattr(x, 'Proxy') else False 
     ff_list = filter(ff_check, obj.InList)
-    ff_named = {ff.Label: ff.Proxy.getDict() for ff in ff_list}
-    feature_dict = {"features": ff_named}
+    ff_named = { ff.Label: {"label": ff.Label, "placement": placement2pose(ff.Placement)} for ff in ff_list }
+    feature_dict = { "features": ff_named }
     if "features" not in partprops.keys():
         partprops.update(feature_dict)
     else:
@@ -520,6 +531,12 @@ spawnClassCommand("ExportGazeboModels",
                   {"Pixmap": str(os.path.join(icondir, "gazeboexport.svg")),
                    "MenuText": "Export SDF-models to Gazebo",
                    "ToolTip": "Export SDF-models for all solid parts"})
+
+spawnClassCommand("InsertGraspPose",
+                  GraspPose.insert,
+                  {"Pixmap": str(os.path.join(icondir, "addgrasppose.svg")),
+                   "MenuText": "Insert Grasp Pose",
+                   "ToolTip": "Insert Grasp Pose for Selected Part"})
 
 
 ###################################################################
